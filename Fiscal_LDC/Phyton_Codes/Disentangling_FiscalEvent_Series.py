@@ -1,69 +1,69 @@
 # %% [0] Installation of required packages
-# Uncomment the following lines if you need to install the packages in your environment
-# !pip install openai
+# Decommenta questa riga se non hai ancora installato il pacchetto di Google
+# !pip install pandas openpyxl google-generativeai
 
-# %% [1] SETUP & IMPORTS
+# %% [1] SETUP E IMPORTS
 import pandas as pd
 import json
 import os
 import time
-from openai import OpenAI
+import google.generativeai as genai
 
-# %% Initialize the OpenAI client
-# Ensure your API key is set in your environment variables
-# API connects two softwares, the Python code and the OpenAI API, allowing the code to send requests and receive responses from the LLM.
-# We Should use the Chat GPT API for consistency, because the Oxford PhD studends have used it to analyze historical fiscal events
-# But these API are pay as you go, at the moment we can try with the API free version from Google, if it works and this is the way we need to procede,
-# maybe we can think about paying the OpenAI API
+# %% Inizializza il client API di Gemini
+# Assicurati di aver fatto export GEMINI_API_KEY="tua-chiave" nel terminale
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("API Key non trovata. Imposta la variabile d'ambiente GEMINI_API_KEY.")
 
-# At the moment given that I won't pay, I will use the Google free version of the API, which is free for a limited number of requests per month.
+genai.configure(api_key=api_key)
 
-# Now, I want that the LLM give me a reproducible output, So I need to set 
-# 1) The temperature to 0.0, which means that the model will always give the same output for the same input, making it deterministic and reproducible.
-# 2) Rigid Model Versioning, not a generic LLM, but a constant model version, so that the model's behavior does not change over time.
-# 3) Set a Seed forcing the server to use the same random number generator state for each request.
+# Utilizziamo Gemini 1.5 Flash (adatto al limite Free Tier di 15 req/min)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-# %% Define file paths based on the uploaded data
-INPUT_FILE = "high_frequency_fiscal_shocks_data.xlsx - Data.csv"
-OUTPUT_FILE = "classified_fiscal_events.csv"
-
-print("Setup complete. Client initialized.")
+# Percorsi dei file
+FILE_NAME = '../Disentangling_Fiscal_Event_Daily_Series.xlsx'
+OUTPUT_FILE = 'classified_fiscal_events_gemini.csv'
 
 # %% [2] DATA INITIALIZATION
-# Load the raw dataset
-df_raw = pd.read_csv(INPUT_FILE)
+# Carica il file Excel (richiede openpyxl installato)
+df_raw = pd.read_excel(FILE_NAME)
 
-# Isolate the required columns to keep the dataframe clean
-df = df_raw[['date', 'pv_change_fiscal_events']].copy()
+# Uniforma i nomi delle colonne in minuscolo per evitare KeyError
+df_raw.columns = df_raw.columns.str.strip().str.lower()
 
-# Initialize the 6 target columns with zeros
+# Adatta il nome della colonna se nel file è singolare o plurale
+target_col_name = 'pv_change_fiscal_event' 
+if target_col_name not in df_raw.columns and 'pv_change_fiscal_events' in df_raw.columns:
+    target_col_name = 'pv_change_fiscal_events'
+
+# Isola le colonne necessarie
+df = df_raw[['date', target_col_name]].copy()
+
+# Inizializza le 6 colonne target con zeri
 target_columns = ['Positive_G', 'Negative_G', 'Positive_T', 'Negative_T', 'G', 'T']
 for col in target_columns:
     df[col] = 0.0
 
-# Add columns for the LLM output to track explanations
+# Aggiunge le colonne per tracciare l'output dell'LLM
 df['LLM_Driver'] = "N"
 df['LLM_Explanation'] = ""
 
-print(f"Dataframe loaded. Shape: {df.shape}")
+print(f"Dataframe caricato. Dimensioni: {df.shape}")
 print(df.head())
 
 # %% [3] LLM API FUNCTION
-def query_llm_for_driver(date):
+def get_fiscal_driver(date):
     """Invia la data all'LLM in modalità strettamente riproducibile."""
-    system_prompt = (
-        "You are an expert US macroeconomic historian. Your task is to identify the primary "
-        "fiscal policy event or news that shifted economic expectations on a given date."
-    )
     
-    user_prompt = f"""
+    # prompt combinato (Gemini unisce system e user prompt in questa chiamata base)
+    prompt = f"""
+    You are an expert US macroeconomic historian.
+    
     Analyze historical US fiscal policy and financial news around the date: {date}.
     A non-zero fiscal shock occurred on this day, moving deficit expectations.
     
     Determine if the primary driver of this news was related to Government Spending (G) or Taxes (T).
-    If it is impossible to identify or ambiguous, classify as None (N).
+    If it is impossible to identify or highly ambiguous, classify as None (N).
     
     Respond strictly with a JSON object containing exactly two keys:
     1. "driver": Must be exactly "G", "T", or "N"
@@ -71,62 +71,56 @@ def query_llm_for_driver(date):
     """
     
     try:
-        response = client.chat.completions.create(
-            # 1. Usa un modello con una data fissa invece di quello generico
-            model="gpt-4o-2024-05-13", 
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            # 2. Azzera la temperatura
-            temperature=0.0, 
-            # 3. Imposta un seed fisso per la riproducibilità
-            seed=42 
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.0, # Modalità deterministica
+                response_mime_type="application/json", # Forza output strutturato
+            )
         )
         
-        content = json.loads(response.choices[0].message.content)
-        return content.get("driver", "N"), content.get("explanation", "")
+        result = json.loads(response.text)
+        return result.get("driver", "N"), result.get("explanation", "")
     except Exception as e:
         print(f"Errore API alla data {date}: {e}")
-        return "N", f"Error: {str(e)}"
+        return "N", "API Error"
 
-print("Function 'get_fiscal_driver' defined successfully.")
+print("Funzione 'get_fiscal_driver' definita con successo.")
 
 # %% [4] SINGLE ROW TEST
-# Find the first date where a shock occurred to test the API
-test_row = df[df['pv_change_fiscal_events'] != 0].iloc[0]
+# Trova la prima riga non nulla per testare la chiamata
+test_row = df[df[target_col_name] != 0].iloc[0]
 test_date = test_row['date']
-test_shock = test_row['pv_change_fiscal_events']
+test_shock = test_row[target_col_name]
 
-print(f"Testing API for Date: {test_date} | Shock Value: {test_shock}")
+print(f"Test API per Data: {test_date} | Shock Value: {test_shock}")
 
-# Run the function
+# Esegue la funzione
 test_driver, test_explanation = get_fiscal_driver(test_date)
 
 print(f"Output Driver: {test_driver}")
 print(f"Output Explanation: {test_explanation}")
 
 # %% [5] ROW EVALUATION & SIGN MAPPING (PIPELINE)
-# Filter indices where the event is not zero
-non_zero_indices = df[df['pv_change_fiscal_events'] != 0].index.tolist()
+# Filtra gli indici in cui lo shock non è zero
+non_zero_indices = df[df[target_col_name] != 0].index.tolist()
 
-# FOR TESTING: Limit to the first 10 events to check logic without high API costs
-test_indices = non_zero_indices[:10] 
-print(f"Processing {len(test_indices)} non-zero events...")
+# PER IL TEST: limita le iterazioni a 5 per verificare la logica
+test_indices = non_zero_indices[:5] 
+print(f"Elaborazione di {len(test_indices)} eventi non nulli...")
 
 for idx in test_indices:
-    i = df.at[idx, 'pv_change_fiscal_events']
+    i = df.at[idx, target_col_name]
     date_val = df.at[idx, 'date']
     
-    # 1. API Call
+    # 1. Chiamata API
     driver, explanation = get_fiscal_driver(date_val)
     
-    # 2. Store raw text
+    # 2. Archiviazione stringhe grezze
     df.at[idx, 'LLM_Driver'] = driver
     df.at[idx, 'LLM_Explanation'] = explanation
     
-    # 3. Sign Mapping and Assignment
+    # 3. Assegnazione logica dei segni
     if driver == "G":
         df.at[idx, 'G'] = i
         if i > 0:
@@ -137,23 +131,23 @@ for idx in test_indices:
     elif driver == "T":
         df.at[idx, 'T'] = i
         if i > 0:
-            df.at[idx, 'Negative_T'] = i  # Deficit expands -> Tax cut
+            df.at[idx, 'Negative_T'] = i  # Deficit si espande -> Taglio tasse
         elif i < 0:
-            df.at[idx, 'Positive_T'] = i  # Deficit shrinks -> Tax hike
+            df.at[idx, 'Positive_T'] = i  # Deficit si restringe -> Aumento tasse
             
-    # Rate limiting pause
-    time.sleep(0.5)
+    # Pausa per Rate Limiting API Google
+    time.sleep(4.5)
 
-print("Mapping complete for the test batch.")
+print("Mappatura completata per il batch di test.")
 
 # %% [6] VERIFY RESULTS & EXPORT
-# View the rows we just processed to ensure the logic mapped variables to the right columns
+# Mostra le righe elaborate per controllo visivo
 processed_view = df.loc[test_indices, [
-    'date', 'pv_change_fiscal_events', 'LLM_Driver', 
+    'date', target_col_name, 'LLM_Driver', 
     'Positive_G', 'Negative_G', 'Positive_T', 'Negative_T'
 ]]
 print(processed_view)
 
-# Save to CSV
+# Esportazione
 # df.to_csv(OUTPUT_FILE, index=False)
-# print(f"File saved to {OUTPUT_FILE}")
+# print(f"File salvato in {OUTPUT_FILE}")
