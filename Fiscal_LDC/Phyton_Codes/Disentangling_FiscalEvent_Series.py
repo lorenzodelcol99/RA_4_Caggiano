@@ -76,46 +76,40 @@ df['LLM_Explanation'] = ""
 
 print(f"Working DataFrame ready. Column used for shock: '{target_col_name}'")
 print(df.head())
-# %% [3] LLM API FUNCTION
-def get_fiscal_driver(date):
-    """
-    Sends the date to the LLM to retrieve the fiscal news driver.
-    Uses temperature=0.0 to ensure deterministic, reproducible results.
-    """
+# %% [3] LLM API FUNCTION (ROBUST & DETERMINISTIC)
+def get_fiscal_driver(date, max_retries=3):
+    """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
+    
     prompt = f"""
-    You are an expert US macroeconomic historian.
-    
-    Analyze historical US fiscal policy and financial news around the date: {date}.
-    A non-zero fiscal shock occurred on this day, moving deficit expectations.
-    
-    Determine if the primary driver of this news was:
-    - Government Spending (G)
-    - Taxes (T)
-    - None (N) if unidentifiable or ambiguous.
-    
-    Respond strictly with a JSON object containing exactly two keys:
-    1. "driver": "G", "T", or "N"
-    2. "explanation": A concise 1-2 sentence summary of the historical event with the reference.
+    As a US macroeconomic historian, analyze fiscal policy news on: {date}.
+    A non-zero fiscal shock occurred. Determine the primary driver.
+    Respond strictly with JSON:
+    {{"driver": "G" or "T" or "N", "explanation": "1-sentence summary"}}
     """
     
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.0, # Ensures reproducibility
-                response_mime_type="application/json", # Forces output format
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.0, # Zero variance for exact reproducibility
+                    response_mime_type="application/json"
+                )
             )
-        )
-        
-        result = json.loads(response.text)
-        return result.get("driver", "N"), result.get("explanation", "")
-        
-    except Exception as e:
-        print(f"Error on date {date}: {e}")
-        return "N", "API Error"
+            result = json.loads(response.text)
+            return result.get("driver", "N"), result.get("explanation", "")
+            
+        except Exception as e:
+            if "429" in str(e) or "Quota" in str(e):
+                print(f"[Rate Limit] Pausing 60s for {date} (Attempt {attempt+1}/{max_retries})...")
+                time.sleep(60)
+            else:
+                print(f"API Error on {date}: {e}")
+                return "N", "API Error"
+                
+    return "N", "Max Retries Reached"
 
-print("Function 'get_fiscal_driver' defined successfully.")
-
+print("Function 'get_fiscal_driver' compiled successfully.")
 # %% [4] SINGLE ROW TEST
 # Test the API with the first available shock
 test_row = df[df[target_col_name] != 0].iloc[0]
@@ -130,39 +124,45 @@ print(f"--- TEST RESULT ---")
 print(f"Driver: {driver}")
 print(f"Explanation: {explanation}")
 
-# %% [5] ROW EVALUATION & SIGN MAPPING
-# Note: Respecting the rate limit of 15 requests per minute for the free tier.
+# %% [5] ROW EVALUATION & SIGN MAPPING (RESUMABLE PIPELINE)
 non_zero_indices = df[df[target_col_name] != 0].index.tolist()
-test_indices = non_zero_indices[:5] # Process first 5 as a test
-print(f"Processing {len(test_indices)} events...")
+print(f"Starting pipeline for {len(non_zero_indices)} events...")
 
-for idx in test_indices:
-    i = df.at[idx, target_col_name]
+for idx in non_zero_indices:
+    # 1. Skip processed rows to allow seamless resuming if interrupted
+    if df.at[idx, 'LLM_Explanation'] not in ["", "API Error", "Max Retries Reached"]:
+        continue 
+        
+    val = df.at[idx, target_col_name]
     date_val = df.at[idx, 'date']
     
+    # Optional print to monitor progress
+    if non_zero_indices.index(idx) % 50 == 0:
+        print(f"Processing row {non_zero_indices.index(idx)} / {len(non_zero_indices)}")
+    
+    # 2. API Call
     driver, explanation = get_fiscal_driver(date_val)
     
+    # 3. Store text outputs
     df.at[idx, 'LLM_Driver'] = driver
     df.at[idx, 'LLM_Explanation'] = explanation
     
-    # Mapping logic for fiscal signs
+    # 4. Map signs elegantly (Less is More)
     if driver == "G":
-        df.at[idx, 'G'] = i
-        if i > 0: df.at[idx, 'Positive_G'] = i
-        elif i < 0: df.at[idx, 'Negative_G'] = i
-            
+        df.at[idx, 'G'] = val
+        df.at[idx, 'Positive_G' if val > 0 else 'Negative_G'] = val
+        
     elif driver == "T":
-        df.at[idx, 'T'] = i
-        if i > 0: df.at[idx, 'Negative_T'] = i  # Deficit expansion -> Tax cut
-        elif i < 0: df.at[idx, 'Positive_T'] = i  # Deficit contraction -> Tax hike
+        df.at[idx, 'T'] = val
+        df.at[idx, 'Negative_T' if val > 0 else 'Positive_T'] = val
             
-    time.sleep(4.5) # Rate limiting pause
+    # 5. Safe pacing (~10 requests/min)
+    time.sleep(6) 
 
-print("Mapping complete.")
+print("=== FULL DATASET MAPPING COMPLETE ===")
 
-# %% [6] VERIFY RESULTS
-processed_view = df.loc[test_indices, [
-    'date', target_col_name, 'LLM_Driver', 'Positive_G', 'Negative_G', 'Positive_T', 'Negative_T'
-]]
-print(processed_view)
-# %%
+
+# %% [6] EXPORT RESULTS
+# Save the fully processed DataFrame to a CSV file so the data is permanently stored
+df.to_csv(OUTPUT_FILE, index=False)
+print(f"Success! The fully classified dataset has been saved to: {OUTPUT_FILE}")
