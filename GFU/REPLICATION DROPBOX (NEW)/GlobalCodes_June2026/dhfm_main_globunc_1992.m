@@ -109,7 +109,7 @@ matname=['globunc_factors_1992_2026_42countries'];
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Load data 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%LORENZO Line 113: OLD: load 'Te_ ... 2M720M5' : --> NEW: load 'Te_ ... 26M5'
+%LORENZO Line 113: OLD: load 'Te_ ... 2M720M5' : --> NEW: load 'Te_ ... 26M6'
 load 'Test2_42countries_92M726M6'
 % ZNB: specify number of series in each block 
 

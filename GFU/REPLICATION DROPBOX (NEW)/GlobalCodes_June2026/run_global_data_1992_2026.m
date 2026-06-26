@@ -61,7 +61,7 @@ bigZ_ns{5}{12}=data(:,124:126); % Thailand
 % LORENZO: OLD: save('T ..... 20 .... bigZ_ns') --> NEW: save('T ..... 26 .... bigZ_ns');
 save('Test2_42countries_92M726M5','bigZ_ns');
 % LORENZO: OLD:  m = mat ... 20M5 ... ue); --> NEW:  m = mat ... 26M5 ... ue);
-m = matfile('Test2_42countries_92M726M5','Writable',true);
+m = matfile('Test2_42countries_92M726M6','Writable',true);
 ZNB = {[3 3 3]  [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]  [3 3] [3 3 3 3 3] [3 3 3 3 3 3 3 3 3 3 3 3]};
 m.ZNB=ZNB;
 run dhfm_main_globunc_1992
