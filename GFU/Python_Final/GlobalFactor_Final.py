@@ -13,6 +13,9 @@ os.chdir(percorso_cartella)
 print("Adding the path")
 
 # %% 1; Phase A and B:
+# Phase A for the daily returns * 100 for Market returns and Exchange rates, and just copying the raw levels for the 10YR Bond Yields
+# Phase B for the monthly SD and SK of the daily returns/levels, to be used in the final GFU dataset
+
 # 1. Create a list of the 3 raw files, along with the names we want for the output files
 datasets = [
     {
@@ -136,6 +139,7 @@ print(f"\n{'='*50}\n ALL 3 DATASETS HAVE BEEN SUCCESSFULLY PROCESSED!")
 
 
 # %% Phase C:
+# aggregate the three Phase B datasets into the GFU original dataset.
 
 print("Building Phase C: Auto-filling the GFU Dataset with Smart Mapping...")
 
@@ -232,8 +236,10 @@ new_gfu.reset_index(inplace=True)
 new_gfu['Date'] = pd.to_datetime(new_gfu['Date']).dt.strftime('%d/%m/%Y')
 
 # 7. Save the final output
-output_name = 'cc_globalfactor_1992M72026M5.xlsx'
+output_name = 'cc_globalfactor_1992M72026M6.xlsx'
 new_gfu.to_excel(output_name, index=False)
 
 print(f"\n Success! The dataset is mapped and saved as '{output_name}'")
 
+
+# %%
