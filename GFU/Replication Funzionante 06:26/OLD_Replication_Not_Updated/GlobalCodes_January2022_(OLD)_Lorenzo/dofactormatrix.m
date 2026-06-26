@@ -1,0 +1,59 @@
+% file to create a [T,nfact] matrix of factors as computed by the dhfm code by MNP13RESTATS
+% data: financial volatilities of stock market/exchange rate/bond yield returns
+% paper: Global Uncertainty (Caggiano, Castelnuovo)
+% 
+
+% loading saved results
+%load prova.mat ;
+% LORENZO: change line 9 and 10 into 11 and 12
+%load globunc_factors_1992_2018_44countries.mat
+%load globunc_factors_1992_2018_44countries_alldraws.mat
+load globunc_factors_1992_2020_42countries.mat
+load globunc_factors_1992_2020_42countries_alldraws.mat
+
+% working with results saved in L4_alldraws.xxx matrices (L4 = four hierarchical levels)
+% these results are saved at the end of the dhfm_run_sampler.m file
+% # of global factors = 1
+% # of regional factors = 5
+% # of country factors conditional on a given region: 
+%   North America = 4, Europe = 19; Oceania = 3, Latin America = 4, Asia = 10
+
+% number of draws in the file
+nd = n_keep/n_skip; 
+
+% global factor
+for jjj=1:nd,
+    globfact(jjj,:) = L4_alldraws.F{1, jjj};
+end
+
+% plot global factor with bands
+figure(1)
+plot([1:T],median(globfact),'k-',[1:T],prctile(globfact,5),'r--',[1:T],prctile(globfact,95),'r--');
+
+% regional factors (save all draws)
+for bbb=1:B,
+    for jjj=1:nd,
+        regfact(bbb,jjj,:)=L4_alldraws.G{1, jjj}{1, bbb};
+    end
+end
+
+% plot regional factor, median (out of all draws)
+figure(2)
+ plot([1:T],median(squeeze((regfact(3,:,:)))));
+
+% country factors (all draws)
+% syntax for the country-specific factors
+% jjj = draws; bbb = block indicator; ccc = country indicator
+%L4_alldraws.H{1, jjj}{1, bbb}{1, ccc}
+% example for the US
+ccc = 1; % US = first country in the North America block
+bbb = 1; % NA = first block
+    for jjj=6:nd,
+        usfact(jjj,:)=L4_alldraws.H{1, jjj}{1, bbb}{1, ccc};
+    end
+    
+figure(3)
+plot([1:T],median(usfact));
+
+
+% to be done, selected countries ...

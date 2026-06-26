@@ -17,7 +17,7 @@ from IPython.display import display
 
 # 1. Load the original and the newly updated datasets
 old_df = pd.read_excel('cc_globalfactor_1992M72020M5.xlsx', sheet_name='raw data')
-new_df = pd.read_excel('cc_globalfactor_1992M72026M5.xlsx')
+new_df = pd.read_excel('cc_globalfactor_1992M72026M6.xlsx')
 
 # 2. Date formatting and indexing
 # Make sure to handle the string formats correctly
