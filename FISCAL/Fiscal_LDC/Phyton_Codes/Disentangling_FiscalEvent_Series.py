@@ -1,22 +1,25 @@
 # %% [0] INSTALLATION OF REQUIRED PACKAGES
 # Run this in your terminal if needed:
 # !pip install pandas openpyxl google-generativeai python-dotenv
-
+# !pip install ollama openpyxl # for local LLM alternative, to run a locally installed LLM instead of using the API
 # %% [1] SETUP & IMPORTS
 import pandas as pd
 import json
 import os
 import time
-import google.generativeai as genai
+# import google.generativeai as genai
 from   dotenv import load_dotenv
+import ollama  #For local LLM alternative
+import openpyxl
 
+# %% [1.2] NOT USED IN THIS SETUP, BUT KEPT FOR FUTURE REFERENCE
 # Load API Key from .env file (for security and professional standard)
 # Never hardcode keys directly in the script, git hub will block the licence if you do that, and it is a security risk.
-load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+#load_dotenv()
+#api_key = os.getenv("GEMINI_API_KEY")
 
-if not api_key:
-    raise ValueError("API Key not found in .env file. Please ensure GEMINI_API_KEY is set.")
+#if not api_key:
+#    raise ValueError("API Key not found in .env file. Please ensure GEMINI_API_KEY is set.")
 
 # Initialize the Gemini client
 # Ensure your API key is set in your environment variables
@@ -35,7 +38,7 @@ if not api_key:
 # 2) Rigid Model Versioning, not a generic LLM, but a constant model version, so that the model's behavior does not change over time.
 # 3) Set a Seed forcing the server to use the same random number generator state for each request.
 
-genai.configure(api_key=api_key)
+#genai.configure(api_key=api_key)
 
 # We use Gemini 1.5 Flash. 
 # Why Gemini instead of OpenAI? 
@@ -43,9 +46,9 @@ genai.configure(api_key=api_key)
 # 2. Performance: It is highly capable for historical information retrieval tasks.
 # 3. Research Independence: Using an alternative model allows for a robustness check against the original authors' GPT-4o-mini results.
 # Note: If high-precision methodology replication is required by the PI later, we can pivot to OpenAI's API.
-model = genai.GenerativeModel('gemini-2.5-flash')
+#model = genai.GenerativeModel('gemini-2.5-flash')
 
-print("Gemini API Client initialized successfully.")
+#print("Gemini API Client initialized successfully.")
 
 # %% [2] DATA INITIALIZATION
 # Define file path. Adjust the path if the file is in a different directory.
@@ -55,7 +58,7 @@ FILE_NAME = '../Disentangling_Fiscal_Event_Daily_Series.xlsx'
 df_raw = pd.read_excel(FILE_NAME)
 print(f"Dataset loaded. Total rows: {len(df_raw)}")
 
-# %% Preprocessing: Standardize column names
+# %% [2.1]Preprocessing: Standardize column names
 df_raw.columns = df_raw.columns.str.strip().str.lower()
 
 # Identify the shock column
@@ -78,49 +81,48 @@ print(f"Working DataFrame ready. Column used for shock: '{target_col_name}'")
 print(df.head())
 # %% [3] LLM API FUNCTION (ROBUST & DETERMINISTIC)
 def get_fiscal_driver(date, max_retries=3):
-    """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
+    """Fetches fiscal drivers locally using Ollama (Llama 3)."""
     
     prompt = f"""
     As a US macroeconomic historian, analyze fiscal policy news on: {date}.
     A non-zero fiscal shock occurred. Determine the primary driver.
-    Respond strictly with JSON:
+    Respond strictly with JSON using this exact structure:
     {{"driver": "G" or "T" or "N", "explanation": "1-sentence summary"}}
     """
     
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.0, # Zero variance for exact reproducibility
-                    response_mime_type="application/json"
-                )
+            # Query the local model
+            response = ollama.chat(
+                model='llama3',
+                messages=[{'role': 'user', 'content': prompt}],
+                format='json', # Force strict JSON output
+                options={
+                    'temperature': 0.0, # Deterministic output
+                    'seed': 42          # Fixed seed for reproducibility
+                }
             )
-            result = json.loads(response.text)
+            
+            # Parse the text response into a Python dictionary
+            result = json.loads(response['message']['content'])
             return result.get("driver", "N"), result.get("explanation", "")
             
         except Exception as e:
-            if "429" in str(e) or "Quota" in str(e):
-                print(f"[Rate Limit] Pausing 60s for {date} (Attempt {attempt+1}/{max_retries})...")
-                time.sleep(60)
-            else:
-                print(f"API Error on {date}: {e}")
-                return "N", "API Error"
+            print(f"Error on {date} (Attempt {attempt+1}): {e}")
                 
-    return "N", "Max Retries Reached"
-
-print("Function 'get_fiscal_driver' compiled successfully.")
-# %% [4] SINGLE ROW TEST
-# Test the API with the first available shock
+    return "N", "Local Processing Error"
+# %% [4] SINGLE ROW TEST# %% [4] SINGLE ROW TEST
+# Test the local LLM with the first available shock
 test_row = df[df[target_col_name] != 0].iloc[0]
 test_date = test_row['date']
 test_shock = test_row[target_col_name]
 
-print(f"Testing API for Date: {test_date} | Shock Value: {test_shock}")
+print(f"Testing Local LLM for Date: {test_date} | Shock Value: {test_shock}")
 
+# This now calls your local Ollama instance
 driver, explanation = get_fiscal_driver(test_date)
 
-print(f"--- TEST RESULT ---")
+print(f"\n--- TEST RESULT ---")
 print(f"Driver: {driver}")
 print(f"Explanation: {explanation}")
 
@@ -129,25 +131,23 @@ non_zero_indices = df[df[target_col_name] != 0].index.tolist()
 print(f"Starting pipeline for {len(non_zero_indices)} events...")
 
 for idx in non_zero_indices:
-    # 1. Skip processed rows to allow seamless resuming if interrupted
-    if df.at[idx, 'LLM_Explanation'] not in ["", "API Error", "Max Retries Reached"]:
+    # Skip already processed rows
+    if df.at[idx, 'LLM_Explanation'] not in ["", "Local Processing Error"]:
         continue 
         
     val = df.at[idx, target_col_name]
     date_val = df.at[idx, 'date']
     
-    # Optional print to monitor progress
     if non_zero_indices.index(idx) % 50 == 0:
         print(f"Processing row {non_zero_indices.index(idx)} / {len(non_zero_indices)}")
     
-    # 2. API Call
+    # Run the local LLM
     driver, explanation = get_fiscal_driver(date_val)
     
-    # 3. Store text outputs
     df.at[idx, 'LLM_Driver'] = driver
     df.at[idx, 'LLM_Explanation'] = explanation
     
-    # 4. Map signs elegantly (Less is More)
+    # Map the signs
     if driver == "G":
         df.at[idx, 'G'] = val
         df.at[idx, 'Positive_G' if val > 0 else 'Negative_G'] = val
@@ -155,9 +155,6 @@ for idx in non_zero_indices:
     elif driver == "T":
         df.at[idx, 'T'] = val
         df.at[idx, 'Negative_T' if val > 0 else 'Positive_T'] = val
-            
-    # 5. Safe pacing (~10 requests/min)
-    time.sleep(6) 
 
 print("=== FULL DATASET MAPPING COMPLETE ===")
 
@@ -166,3 +163,4 @@ print("=== FULL DATASET MAPPING COMPLETE ===")
 # Save the fully processed DataFrame to a CSV file so the data is permanently stored
 df.to_csv(OUTPUT_FILE, index=False)
 print(f"Success! The fully classified dataset has been saved to: {OUTPUT_FILE}")
+
