@@ -12,7 +12,8 @@ from   dotenv import load_dotenv
 import ollama  #For local LLM alternative
 import openpyxl
 
-# %% [1.2] Load API Key from .env file (for security and professional standard)
+# %% [1.2] NOT USED IN THIS SETUP, BUT KEPT FOR FUTURE REFERENCE
+# Load API Key from .env file (for security and professional standard)
 # Never hardcode keys directly in the script, git hub will block the licence if you do that, and it is a security risk.
 #load_dotenv()
 #api_key = os.getenv("GEMINI_API_KEY")
