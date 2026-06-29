@@ -30,7 +30,6 @@ if not api_key:
 # If our number of request overcomes the free limit, we can think about LLM API which runs locally, they use the local GPU to run the model, but they are not as powerful as the OpenAI API.
 # Now, I want that the LLM give me a reproducible output, So I need to set
 
-
 # 1) The temperature to 0.0, which means that the model will always give the same output for the same input, making it deterministic and reproducible.
 # 2) Rigid Model Versioning, not a generic LLM, but a constant model version, so that the model's behavior does not change over time.
 # 3) Set a Seed forcing the server to use the same random number generator state for each request.
@@ -50,32 +49,30 @@ print("Gemini API Client initialized successfully.")
 # %% [2] DATA INITIALIZATION
 # Define file path. Adjust the path if the file is in a different directory.
 FILE_NAME = '../Disentangling_Fiscal_Event_Daily_Series.xlsx'
+OUTPUT_FILE = '../Classified_Fiscal_Events.csv'
 
-# Load dataset
-df_raw = pd.read_excel(FILE_NAME)
-print(f"Dataset loaded. Total rows: {len(df_raw)}")
-
-# %% Preprocessing: Standardize column names
-df_raw.columns = df_raw.columns.str.strip().str.lower()
-
-# Identify the shock column
-target_col_name = 'pv_change_fiscal_event' 
-if target_col_name not in df_raw.columns and 'pv_change_fiscal_events' in df_raw.columns:
-    target_col_name = 'pv_change_fiscal_events'
-
-# Create the working DataFrame
-df = df_raw[['date', target_col_name]].copy()
-
-# Initialize result columns
-for col in [ 'G', 'T', 'Positive_G', 'Negative_G', 'Positive_T', 'Negative_T']:
-    df[col] = 0.0
-
-# Add columns for LLM metadata
-df['LLM_Driver'] = "N"
-df['LLM_Explanation'] = ""
+# Controlla se esiste già un salvataggio precedente
+if os.path.exists(OUTPUT_FILE):
+    print(f"Loading existing progress from {OUTPUT_FILE}...")
+    df = pd.read_csv(OUTPUT_FILE)
+    target_col_name = 'pv_change_fiscal_event' if 'pv_change_fiscal_event' in df.columns else 'pv_change_fiscal_events'
+else:
+    print(f"Starting fresh from {FILE_NAME}...")
+    df_raw = pd.read_excel(FILE_NAME)
+    df_raw.columns = df_raw.columns.str.strip().str.lower()
+    
+    target_col_name = 'pv_change_fiscal_event' if 'pv_change_fiscal_event' in df_raw.columns else 'pv_change_fiscal_events'
+    df = df_raw[['date', target_col_name]].copy()
+    
+    for col in ['G', 'T', 'Positive_G', 'Negative_G', 'Positive_T', 'Negative_T']:
+        df[col] = 0.0
+    df['LLM_Driver'] = "N"
+    df['LLM_Explanation'] = ""
 
 print(f"Working DataFrame ready. Column used for shock: '{target_col_name}'")
+print(f"Total rows: {len(df)}")
 print(df.head())
+
 # %% [3] LLM API FUNCTION (ROBUST & DETERMINISTIC)
 def get_fiscal_driver(date, max_retries=3):
     """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
@@ -110,6 +107,7 @@ def get_fiscal_driver(date, max_retries=3):
     return "N", "Max Retries Reached"
 
 print("Function 'get_fiscal_driver' compiled successfully.")
+
 # %% [4] SINGLE ROW TEST
 # Test the API with the first available shock
 test_row = df[df[target_col_name] != 0].iloc[0]
@@ -130,7 +128,7 @@ print(f"Starting pipeline for {len(non_zero_indices)} events...")
 
 for idx in non_zero_indices:
     # 1. Skip processed rows to allow seamless resuming if interrupted
-    if df.at[idx, 'LLM_Explanation'] not in ["", "API Error", "Max Retries Reached"]:
+    if df.at[idx, 'LLM_Explanation'] not in ["", "API Error", "Max Retries Reached", None]:
         continue 
         
     val = df.at[idx, target_col_name]
@@ -147,7 +145,12 @@ for idx in non_zero_indices:
     df.at[idx, 'LLM_Driver'] = driver
     df.at[idx, 'LLM_Explanation'] = explanation
     
-    # 4. Map signs elegantly (Less is More)
+    # 4. Stops the cicle if the daily API limit is reached
+    if explanation == "Max Retries Reached":
+        print("Daily API limit reached. Stopping pipeline and saving progress.")
+        break
+
+    # 5. Map signs elegantly
     if driver == "G":
         df.at[idx, 'G'] = val
         df.at[idx, 'Positive_G' if val > 0 else 'Negative_G'] = val
@@ -156,13 +159,16 @@ for idx in non_zero_indices:
         df.at[idx, 'T'] = val
         df.at[idx, 'Negative_T' if val > 0 else 'Positive_T'] = val
             
-    # 5. Safe pacing (~10 requests/min)
-    time.sleep(6) 
+    # 6. Saving progresses locally after every row
+    df.to_csv(OUTPUT_FILE, index=False)
+
+    # 7. Safe pacing (~10 requests/min)
+    time.sleep(20) 
 
 print("=== FULL DATASET MAPPING COMPLETE ===")
-
 
 # %% [6] EXPORT RESULTS
 # Save the fully processed DataFrame to a CSV file so the data is permanently stored
 df.to_csv(OUTPUT_FILE, index=False)
-print(f"Success! The fully classified dataset has been saved to: {OUTPUT_FILE}")
+print(f"Success! The current dataset has been saved to: {OUTPUT_FILE}")
+# %%
