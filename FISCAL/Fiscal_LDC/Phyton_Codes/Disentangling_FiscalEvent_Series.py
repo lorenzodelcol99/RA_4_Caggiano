@@ -40,7 +40,7 @@ def get_fiscal_driver(date, max_retries=2):
     Analyze the following date: {date}.
     You are a macroeconomic historian. 
     1. Determine if the event is primarily related to Government Spending (G) or Tax changes (T).
-    2. If it is neither clearly G nor T, or if the fiscal impact is negligible/uncertain, classify as 'N'.
+    2. You need to identify the source of the fiscal event and classify them, thinka bout the nautre of the event, whether it is a military expenditure, infrastructure investment, social program, or tax legislation.
     3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
     
     Respond strictly with JSON:
