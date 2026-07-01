@@ -34,18 +34,28 @@ else:
 print(f"Working DataFrame ready. Total rows: {len(df)}")
 
 # %% [3] LLM API FUNCTION (LOCAL OLLAMA)
+import time
+import json
+import ollama
+
 def get_fiscal_driver(date, max_retries=2):
-    # Prompt più rigoroso
     prompt = f"""
-    Analyze the following date: {date}.
-    You are a macroeconomic historian. 
-    1. Determine if the event is primarily related to Government Spending (G) or Tax changes (T).
-    2. You need to identify the source of the fiscal event and classify them, thinka bout the nautre of the event, whether it is a military expenditure, infrastructure investment, social program, or tax legislation.
-    3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
+    System: You are an expert US macroeconomic historian.
+    Task: On the specific date {date}, a significant fiscal policy event occurred in the United States. 
+    You MUST search your internal knowledge base of historical newspapers, press releases, and official US government documents to identify this exact event.
     
-    Respond strictly with JSON:
-    {{"driver": "G" or "T" or "N", "explanation": "Provide a specific reason linking the shock to G or T."}}
+    Rules for classification:
+    - You MUST classify the event as either "G" or "T". There is no neutral option.
+    - Return "G" if the event relates to Government Spending (e.g., military, infrastructure, budget acts, social programs, bailouts).
+    - Return "T" if the event relates to Taxes (e.g., tax cuts, tax hikes, rebates, tariffs).
+    
+    Output requirement:
+    Respond STRICTLY with a valid JSON object. Do not include any conversational text outside the JSON.
+    
+    Format:
+    {{"driver": "G" or "T", "explanation": "Name the specific historical event found in newspapers/official documents and briefly state why it is G or T."}}
     """
+    
     for attempt in range(max_retries):
         try:
             response = ollama.chat(
@@ -55,11 +65,23 @@ def get_fiscal_driver(date, max_retries=2):
                 options={'temperature': 0.0, 'seed': 42}
             )
             result = json.loads(response['message']['content'])
-            return result.get("driver", "N"), result.get("explanation", "")
+            
+            # Estrazione del risultato
+            driver = result.get("driver", "").upper()
+            
+            # Controllo di sicurezza: se il modello devia, forziamo un errore di parsing 
+            # piuttosto che inserire un dato sporco
+            if driver not in ["G", "T"]:
+                raise ValueError(f"Model output invalid driver: {driver}")
+                
+            return driver, result.get("explanation", "")
+            
         except Exception as e:
             print(f"Error on {date} (Attempt {attempt+1}): {e}")
-            time.sleep(2) # Breve pausa in caso di errore locale
-    return "N", "Local Processing Error"
+            time.sleep(2)
+            
+    # Se fallisce tutti i tentativi, restituisce un errore rintracciabile nel dataframe
+    return "Error", "Forced binary classification failed or Local Processing Error"
 
 # %% [4] SINGLE ROW TEST
 #test_row = df[df['pv_change_fiscal_event' if 'pv_change_fiscal_event' in df.columns else 'pv_change_fiscal_events'] != 0].iloc[0]
