@@ -132,7 +132,7 @@ date,pv_change_fiscal_event,G,T,Positive_G,Negative_G,Positive_T,Negative_T,LLM_
 1947-07-03,-3.36235055704062,0.0,-3.36235055704062,0.0,0.0,-3.36235055704062,0.0,T,"On July 3, 1947, the Republican-controlled Congress passed a second bill aimed at cutting income taxes, signaling a significant legislative push for tax reduction despite anticipated presidential opposition."
 1947-07-04,-0.8896845639460098,0.0,-0.8896845639460098,0.0,0.0,-0.8896845639460098,0.0,T,"The primary fiscal policy news around July 4, 1947, centered on President Truman's vetoes of Republican-led tax cut bills in June and the subsequent failure of Congress to override them, preventing a significant reduction in taxation."
 1947-07-07,0.1942236469666462,0.0,0.1942236469666462,0.0,0.0,0.0,0.1942236469666462,T,"The primary driver was the legislative effort to enact significant income tax cuts, which had passed Congress and was awaiting a presidential veto, creating uncertainty and debate around future tax levels."
-1947-07-08,-0.8896845639460143,0.0,0.0,0.0,0.0,0.0,0.0,N,Max Retries Reached
+1947-07-08,-0.8896845639460143,0.0,-0.8896845639460143,0.0,0.0,-0.8896845639460143,0.0,T,"The Senate failed to override President Truman's veto of a significant income tax reduction bill, ensuring higher existing tax rates remained in effect."
 1947-07-09,0.0,0.0,0.0,0.0,0.0,0.0,0.0,N,
 1947-07-10,0.8896845639460143,0.0,0.0,0.0,0.0,0.0,0.0,N,
 1947-07-11,0.0,0.0,0.0,0.0,0.0,0.0,0.0,N,
