@@ -55,7 +55,7 @@ corr_df = pd.DataFrame(correlations)
 # Sort ascending so any problematic correlations (less than 1.0) appear at the top
 corr_df = corr_df.sort_values(by='Correlation', ascending=True).reset_index(drop=True)
 
-print("Correlation Table (Original vs. Updated Dataset | 1992M7 - 2020M5):")
+print("Correlation Table (Original vs. Updated Dataset | 1992M7 - 2020M6):")
 # In standard Python/VS Code, print(corr_df.to_string()) is safer than display() if not using interactive windows, 
 # but if you are running this in a VS Code interactive python window (# %%), display() works perfectly.
 display(corr_df)

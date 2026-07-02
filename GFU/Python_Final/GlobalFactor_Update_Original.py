@@ -244,7 +244,8 @@ new_gfu.reset_index(inplace=True)
 new_gfu['Date'] = pd.to_datetime(new_gfu['Date']).dt.strftime('%d/%m/%Y')
 
 # 7. Save the final output
-output_name = 'cc_globalfactor_1992M72026M5.xlsx'
+output_name = 'cc_globalfactor_1992M72026M6_original_updated.xlsx'
 new_gfu.to_excel(output_name, index=False)
 
 print(f"\n Success! The dataset is mapped and saved as '{output_name}'")
+# %%
