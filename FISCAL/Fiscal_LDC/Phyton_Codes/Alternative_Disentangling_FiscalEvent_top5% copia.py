@@ -48,19 +48,41 @@ print(f"Top 5% fiscal events extracted: {len(df_top)} rows.")
 print(df_top.head())
 
 # %% [4] LLM API FUNCTION (BINARY PROMPT)
+# %% [4] LLM API FUNCTION (OXFORD-STYLE STRUCTURED PROMPT)
 def get_fiscal_driver(date, max_retries=3):
-    """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
+    """Fetches fiscal drivers using an advanced, strictly structured prompt."""
     
-    prompt = f"""
-    Analyze the following date: {date}.
-    You are a US macroeconomic historian. 
-    1. Determine if the fiscal policy news is primarily related to Government Spending (G) or Tax changes (T).
-    2. YOU MUST CHOOSE EITHER 'G' OR 'T'. Determine the single most dominant factor in the macroeconomic news on this day.
-    3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
+    prompt = f"""<role>
+    You are a macroeconomic research analyst and US economic historian specialized in US fiscal policy. Your expertise lies in disentangling the drivers of the US Federal Budget Balance into outlays and receipts.
+    </role>
+    <task>
+    You will analyze the historical context for the following date: {date}.
+    A significant non-zero fiscal shock occurred on this date. Your task is to:
+    1. Identify the major US fiscal policy event, announcement, or legislation that occurred around this date.
+    2. Determine whether the single most dominant factor of this event is primarily related to Government Spending (G) or Tax changes (T).
+    3. Produce a concise, objective explanation of your classification.
+    </task>
+    <guidance>
+    WHAT CONSTITUTES GOVERNMENT SPENDING (G):
+    - Congressional budget actions, appropriations bills, and continuing resolutions.
+    - Spending program changes (entitlements like Medicare/Medicaid, discretionary spending, defense/military outlays).
+    - Emergency fiscal measures, public works, and job creation programs.
+    - Government shutdown occurrences or resolutions.
     
-    Respond strictly with JSON:
-    {{"driver": "G" or "T", "explanation": "Provide a specific reason linking the shock to G or T."}}
-    """
+    WHAT CONSTITUTES TAX CHANGES (T):
+    - Tax policy changes or proposals (corporate, individual, payroll, capital gains taxes).
+    - Fiscal stimulus delivered specifically through tax rebates or tax credits.
+    - Tariff revenues with direct fiscal components.
+
+    IMPORTANT GUIDELINES:
+    - YOU MUST CHOOSE EITHER 'G' OR 'T'. If an event includes both, determine the single most dominant factor based on its historical quantitative impact or macroeconomic prominence.
+    - BE BALANCED AND DESCRIPTIVE: Do not default to Tax or G Acts. Rigorously check for defense spending or social programs.
+    - Be explicitly descriptive. If specific legislation or a clear historical event (e.g., "Economic Recovery Tax Act", "September 11 attacks", "Omnibus Budget Reconciliation Act") is known for this date, name it explicitly.
+    </guidance>
+    <output>
+    Respond strictly with valid JSON using this exact structure, with no markdown formatting outside the JSON block:
+    {{"driver": "G" or "T", "explanation": "A concise, 1-2 sentence summary naming the specific historical event and justifying why it is classified as G or T."}}
+    </output>"""
     
     for attempt in range(max_retries):
         try:
