@@ -26,19 +26,19 @@ FILE_NAME = '../Disentangling_Fiscal_Event_Daily_Series.xlsx'
 # AGGIORNATO IL NOME DEL FILE DI OUTPUT
 OUTPUT_FILE = '../Alternative_Classified_Fiscal_Events_Top5Percent.xlsx'
 
-# 1 & 2) Caricamento raw e identificazione colonna target
+# Loading raw data and identifying target column
 df_raw = pd.read_excel(FILE_NAME)
 df_raw.columns = df_raw.columns.str.strip().str.lower()
 target_col = 'pv_change_fiscal_event' if 'pv_change_fiscal_event' in df_raw.columns else 'pv_change_fiscal_events'
 
-# 5) Filtro dei soli eventi non-zero e calcolo della soglia (95° percentile)
+# Filtering out the non zero events and calculating the threshold (95th percentile)
 non_zero_df = df_raw[df_raw[target_col] != 0]
 threshold = non_zero_df[target_col].abs().quantile(0.95)
 
-# 6) Creazione del df_top copiando le righe oltre la soglia (solo data e shock)
+# Creating the df_top Creating the df_top by copying rows above the threshold (date and shock only)
 df_top = non_zero_df[non_zero_df[target_col].abs() >= threshold][['date', target_col]].copy()
 
-# 3 & 4) Inizializzazione delle nuove colonne per l'LLM sul df_top
+# Initialization of new columns for the LLM on df_top
 for col in ['G', 'T', 'Positive_G', 'Negative_G', 'Positive_T', 'Negative_T']:
     df_top[col] = np.nan
 df_top['LLM_Driver'] = "Pending"
@@ -47,7 +47,6 @@ df_top['LLM_Explanation'] = ""
 print(f"Top 5% fiscal events extracted: {len(df_top)} rows.")
 print(df_top.head())
 
-# %% [4] LLM API FUNCTION (BINARY PROMPT)
 # %% [4] LLM API FUNCTION (OXFORD-STYLE STRUCTURED PROMPT)
 def get_fiscal_driver(date, max_retries=3):
     """Fetches fiscal drivers using an advanced, strictly structured prompt."""
