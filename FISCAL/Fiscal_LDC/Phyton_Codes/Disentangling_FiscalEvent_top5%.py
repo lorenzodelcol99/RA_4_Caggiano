@@ -25,19 +25,19 @@ print("Gemini API Client initialized successfully.")
 FILE_NAME = '../Disentangling_Fiscal_Event_Daily_Series.xlsx'
 OUTPUT_FILE = '../Classified_Fiscal_Events_Top5Percent.xlsx'
 
-# 1 & 2) Caricamento raw e identificazione colonna target
+# Loading raw data and identifying target column
 df_raw = pd.read_excel(FILE_NAME)
 df_raw.columns = df_raw.columns.str.strip().str.lower()
 target_col = 'pv_change_fiscal_event' if 'pv_change_fiscal_event' in df_raw.columns else 'pv_change_fiscal_events'
 
-# 5) Filtro dei soli eventi non-zero e calcolo della soglia (95° percentile)
+# Filtering out the non zero events and calculating the threshold (95th percentile)
 non_zero_df = df_raw[df_raw[target_col] != 0]
 threshold = non_zero_df[target_col].abs().quantile(0.95)
 
-# 6) Creazione del df_top copiando le righe oltre la soglia (solo data e shock)
+# Creating the df_top by copying rows above the threshold (date and shock only)
 df_top = non_zero_df[non_zero_df[target_col].abs() >= threshold][['date', target_col]].copy()
 
-# 3 & 4) Inizializzazione delle nuove colonne per l'LLM sul df_top
+# Initialization of new columns for the LLM on df_top
 for col in ['G', 'T', 'Positive_G', 'Negative_G', 'Positive_T', 'Negative_T']:
     df_top[col] = np.nan
 df_top['LLM_Driver'] = "N"
@@ -46,20 +46,34 @@ df_top['LLM_Explanation'] = ""
 print(f"Top 5% fiscal events extracted: {len(df_top)} rows.")
 print(df_top.head())
 
-# %% [4] LLM API FUNCTION (BALANCED PROMPT)
+# %% [4] LLM API FUNCTION (NEWS CYCLE & CHERRY-PICKED PROMPT)
 def get_fiscal_driver(date, max_retries=3):
-    """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
+    """Fetches fiscal drivers by analyzing a narrow historical news window around the peak shock."""
     
-    prompt = f"""
-    Analyze the following date: {date}.
-    You are a US macroeconomic historian. 
-    1. Determine if the fiscal policy news is primarily related to Government Spending (G) or Tax changes (T).
-    2. If it is neither clearly G nor T, or if the fiscal impact is negligible/uncertain, classify as 'N'.
-    3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
+    prompt = f"""<role>
+    You are a US macroeconomic research historian. Your expertise lies in analyzing historical newspaper archives and congressional records to identify the drivers of massive federal budget shocks.
+    </role>
+    <task>
+    Analyze the historical news cycle surrounding this date: {date}.
+    A massive, peak daily fiscal shock is recorded on this day. Your task is to identify what major fiscal policy news was breaking in the 48-to-72-hour window around this date (t-1 to t+1), and classify the primary driver as Government Spending (G), Tax changes (T), or Neutral/Mixed (N).
+    </task>
+    <data_context>
+    CRITICAL METHODOLOGICAL CONSTRAINT: The dataset contains ONLY the top 5% largest fiscal shocks in magnitude. Remember that these are the 5% in magnitude largest daily shock of all the dataset, so probably we are omitting the surrounding smaller daily shocks.
+    Furthermore, account for historical reporting lags: an event happening late on day t-1 is often printed in newspapers on day t or t+1. You must scan the tight window around {date} to find the specific breakthrough, major vote, or announcement that triggered this outsized macroeconomic reaction.
+    </data_context>
+    <guidance>
+    1. CLASSIFICATION CATEGORIES:
+       - 'G' (Government Spending): If the breaking news in this window is primarily about appropriations bills, defense/military spending hikes, entitlement changes, public works, or government shutdowns.
+       - 'T' (Tax Changes): If the breaking news in this window is primarily about tax acts, individual/corporate rate adjustments, tax rebates, or tariff revenues.
+       - 'N' (Neutral/Mixed): If the newspaper coverage reveals a balanced 'omnibus' package where spending and tax adjustments are inextricably linked, or if the news is ambiguous.
     
-    Respond strictly with JSON:
-    {{"driver": "G" or "T" or "N", "explanation": "Provide a specific reason linking the shock to G or T."}}
-    """
+    2. BE BALANCED: do tnot ex-ante assume a that a category, G Vs T is more probable. Carefully label them by verifying what was the true driver of the event.
+    3. BE DESCRIPTIVE: Explicitly name the legislation, historical event, or policy package reported in the press during this window.
+    </guidance>
+    <output>
+    Respond strictly with valid JSON using this exact structure, with no markdown formatting outside the JSON block:
+    {{"driver": "G" or "T" or "N", "explanation": "A concise, 1-2 sentence summary identifying the specific event reported around this date and justifying the G/T/N choice."}}
+    </output>"""
     
     for attempt in range(max_retries):
         try:
@@ -84,8 +98,8 @@ def get_fiscal_driver(date, max_retries=3):
     return "N", "Max Retries Reached"
 
 print("Function 'get_fiscal_driver' compiled successfully.")
-
 # %% [6] ROW EVALUATION & SIGN MAPPING (RESUMABLE PIPELINE)
+# need to think about the sign of the shocks: G positive when the shock is negative?..
 indices = df_top.index.tolist()
 print(f"Starting pipeline for {len(indices)} events...")
 
@@ -95,8 +109,7 @@ for idx in indices:
     
     if current_expl not in ["", "nan", "None", "API Error", "Max Retries Reached"]:
         continue 
-        
-    # ---> CORREZIONE QUI: usato target_col invece di target_col_name <---
+    
     val = df_top.at[idx, target_col] 
     date_val = df_top.at[idx, 'date']
     
