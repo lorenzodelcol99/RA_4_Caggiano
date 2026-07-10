@@ -46,29 +46,19 @@ df_top['LLM_Explanation'] = ""
 print(f"Top 5% fiscal events extracted: {len(df_top)} rows.")
 print(df_top.head())
 
-# %% [4] LLM API FUNCTION (NEWS CYCLE & CHERRY-PICKED PROMPT)
+# %% [4] LLM API FUNCTION (BALANCED PROMPT)
 def get_fiscal_driver(date, max_retries=3):
     """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
     
     prompt = f"""
-    <role>
-    You are a US macroeconomic historian. 
-    </role>
-    <task>
-    Analyze the historical news cycle surrounding this date: {date}.
-    A massive, peak daily fiscal shock is recorded on this day. Your task is to identify what major fiscal policy news was breaking in the 48-to-72-hour window around this date (t-1 to t+1), and classify the primary driver as Government Spending (G), Tax changes (T), or Neutral/Mixed (N).
-    </task>
     Analyze the following date: {date}.
-    <data_context>
-    CRITICAL METHODOLOGICAL CONSTRAINT: The dataset contains ONLY the top 5% largest fiscal shocks in magnitude. Remember that these are the 5% in magnitude largest daily shock of all the dataset, so probably we are omitting the surrounding smaller daily shocks.
-    Furthermore, account for historical reporting lags: an event happening late on day t-1 is often printed in newspapers on day t or t+1. You must scan the tight window around {date} to find the specific breakthrough, major vote, or announcement that triggered this outsized macroeconomic reaction.
-    </data_context>
+    You are a US macroeconomic historian. 
     1. Determine if the fiscal policy news is primarily related to Government Spending (G) or Tax changes (T).
-    2. YOU MUST CHOOSE EITHER 'G' OR 'T'. Determine the single most dominant factor in the macroeconomic news on this day.
+    2. If it is neither clearly G nor T, or if the fiscal impact is negligible/uncertain, classify as 'N'.
     3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
     
     Respond strictly with JSON:
-    {{"driver": "G" or "T", "explanation": "Provide a specific reason linking the shock to G or T."}}
+    {{"driver": "G" or "T" or "N", "explanation": "Provide a specific reason linking the shock to G or T."}}
     """
     
     for attempt in range(max_retries):
@@ -81,7 +71,7 @@ def get_fiscal_driver(date, max_retries=3):
                 )
             )
             result = json.loads(response.text)
-            return result.get("driver", "Error"), result.get("explanation", "")
+            return result.get("driver", "N"), result.get("explanation", "")
             
         except Exception as e:
             if "429" in str(e) or "Quota" in str(e):
@@ -89,9 +79,9 @@ def get_fiscal_driver(date, max_retries=3):
                 time.sleep(60)
             else:
                 print(f"API Error on {date}: {e}")
-                return "Error", "API Error"
+                return "N", "API Error"
                 
-    return "Error", "Max Retries Reached"
+    return "N", "Max Retries Reached"
 
 print("Function 'get_fiscal_driver' compiled successfully.")
 # %% [6] ROW EVALUATION & SIGN MAPPING (RESUMABLE PIPELINE)
