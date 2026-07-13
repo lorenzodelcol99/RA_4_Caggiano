@@ -53,6 +53,7 @@ def get_fiscal_driver(date, max_retries=3):
     prompt = f"""
     Analyze the following date: {date}.
     You are a US macroeconomic historian. 
+    Recall that the PV_change_fiscal_event variable is derived from the BUDGET BALANCE, which is SURPLUS = T - G.
     1. Determine if the fiscal policy news is primarily related to Government Spending (G) or Tax changes (T).
     2. If it is neither clearly G nor T, or if the fiscal impact is negligible/uncertain, classify as 'N'.
     3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
@@ -111,12 +112,14 @@ for idx in indices:
         print("Daily API limit reached. Stopping pipeline and saving progress.")
         break
 
+    # The PV_change_fiscal_event variable is created from a BUDGET BALANCE --> SURPLUS --> T - G --> need to remember this to interpret the sign of the shocks correctly
+
     if driver == "G":
         df_top.at[idx, 'G'] = val
-        df_top.at[idx, 'Positive_G' if val > 0 else 'Negative_G'] = val
+        df_top.at[idx, 'Positive_G' if val < 0 else 'Negative_G'] = val
     elif driver == "T":
         df_top.at[idx, 'T'] = val
-        df_top.at[idx, 'Negative_T' if val > 0 else 'Positive_T'] = val
+        df_top.at[idx, 'Negative_T' if val < 0 else 'Positive_T'] = val
             
     df_top.to_excel(OUTPUT_FILE, index=False)
     time.sleep(20) 
