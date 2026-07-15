@@ -48,19 +48,32 @@ print(df_top.head())
 
 # %% [4] LLM API FUNCTION (BALANCED PROMPT)
 def get_fiscal_driver(date, max_retries=3):
-    """Fetches fiscal drivers with strict reproducibility and auto-retry for 429s."""
+    """Fetches fiscal drivers by analyzing a narrow historical news window around the peak shock."""
     
-    prompt = f"""
-    Analyze the following date: {date}.
-    You are a US macroeconomic historian. 
-    Recall that the PV_change_fiscal_event variable is derived from the BUDGET BALANCE, which is SURPLUS = T - G.
-    1. Determine if the fiscal policy news is primarily related to Government Spending (G) or Tax changes (T).
-    2. If it is neither clearly G nor T, or if the fiscal impact is negligible/uncertain, classify as 'N'.
-    3. BE BALANCED: Do not assume every fiscal event is a Tax Act. Check if the event is related to military spending, infrastructure, or social programs (G) versus revenue changes (T).
+    prompt = f"""<role>
+    You are a US macroeconomic research historian. Your expertise lies in analyzing historical newspaper archives and congressional records to identify the drivers of massive federal budget shocks.
+    </role>
+    <task>
+    Analyze the historical news cycle surrounding this date: {date}.
+    A massive, peak daily fiscal shock is recorded on this day. Your task is to identify what major fiscal policy news was breaking in the 48-to-72-hour window around this date (t-1 to t+1), and classify the primary driver as Government Spending (G), Tax changes (T), or Neutral/Mixed (N).
+    </task>
+    <data_context>
+    CRITICAL METHODOLOGICAL CONSTRAINT: The dataset contains ONLY the top 5% largest fiscal shocks in magnitude. Remember that these are the 5% in magnitude largest daily shock of all the dataset, so probably we are omitting the surrounding smaller daily shocks.
+    Furthermore, account for historical reporting lags: an event happening late on day t-1 is often printed in newspapers on day t or t+1. You must scan the tight window around {date} to find the specific breakthrough, major vote, or announcement that triggered this outsized macroeconomic reaction.
+    </data_context>
+    <guidance>
+    1. CLASSIFICATION CATEGORIES:
+       - 'G' (Government Spending): If the breaking news in this window is primarily about appropriations bills, defense/military spending hikes, entitlement changes, public works, or government shutdowns.
+       - 'T' (Tax Changes): If the breaking news in this window is primarily about tax acts, individual/corporate rate adjustments, tax rebates, or tariff revenues.
+       - 'N' (Neutral/Mixed): If the newspaper coverage reveals a balanced 'omnibus' package where spending and tax adjustments are inextricably linked, or if the news is ambiguous, and you are not able to distinguish if it is primarily G or T.
     
-    Respond strictly with JSON:
-    {{"driver": "G" or "T" or "N", "explanation": "Provide a specific reason linking the shock to G or T."}}
-    """
+    2. BE BALANCED: do tnot ex-ante assume a that a category, G Vs T is more probable. Carefully label them by verifying what was the true driver of the event.
+    3. BE DESCRIPTIVE: Explicitly name the legislation, historical event, or policy package reported in the press during this window.
+    </guidance>
+    <output>
+    Respond strictly with valid JSON using this exact structure, with no markdown formatting outside the JSON block:
+    {{"driver": "G" or "T" or "N", "explanation": "A concise, 1-2 sentence summary identifying the specific event reported around this date and justifying the G/T/N choice."}}
+    </output>"""
     
     for attempt in range(max_retries):
         try:
@@ -119,7 +132,7 @@ for idx in indices:
         df_top.at[idx, 'Positive_G' if val < 0 else 'Negative_G'] = val
     elif driver == "T":
         df_top.at[idx, 'T'] = val
-        df_top.at[idx, 'Negative_T' if val < 0 else 'Positive_T'] = val
+        df_top.at[idx, 'Positive_T' if val > 0 else 'Negative_T'] = val
             
     df_top.to_excel(OUTPUT_FILE, index=False)
     time.sleep(20) 
