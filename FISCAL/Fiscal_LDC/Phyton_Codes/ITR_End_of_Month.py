@@ -6,9 +6,10 @@ import os # Operationg System, used to map the path of the files (working direct
 # %% [2] Loading Raw Data
 
 # Setting the Working Directory to the location of the raw data files
-os.chdir('/Users/lorenzodelcol/Desktop/GIT/RA_4_Caggiano/FISCAL/Fiscal_Data/Initial_Cagg_Material')
+os.chdir('/Users/lorenzodelcol/Desktop/GIT/RA_4_Caggiano/FISCAL/Fiscal_Data/Initial_Cagg_Material/')
 
 OUTPUT_FILE = '../ITR_dataframe.xlsx'
+# OUTPUT_Gov_FILE = '../Gov_Bond_End_of_Month_df.xlsx'
 
 # Loading raw data
 MunisData2            = pd.read_excel('MunisData2.xlsx'    , sheet_name='SubData')   # Municipal Bond Yields for 1,2,3,5,10,15,20 and 30 year maturities. END OF MONTH data from December 1949 to October 2008
@@ -34,7 +35,7 @@ ITR_df = MunisData2.iloc[:, [0, 1, 4]].copy() #copying the columns of interest (
 # for Gov bonds I should copy the early period observations that I don't have in the FRED datasets. But Before I want to check the correlation between the two datasets for the overlapping period, to see if they are consistent with each other.
 
 # Now I need to revert the order of the rows in the Muni_Benchmark
-Muni_Benchmark_cleaned = Muni_Benchmark.iloc[6:, ] # Adjust the slice as needed
+Muni_Benchmark_cleaned = Muni_Benchmark.iloc[6:, ] # removing the first rows that contain information about data sources
 Muni_Benchmark_reversed = Muni_Benchmark_cleaned.iloc[::-1].reset_index(drop=True) #reversing the order of the rows in the Muni_Benchmark dataset
 Muni_Benchmark_reversed_renamed = Muni_Benchmark_reversed.iloc[:, [0, 1, 2]].set_axis(ITR_df.columns, axis=1)
 
@@ -45,6 +46,36 @@ ITR_df = pd.concat([ITR_df, Muni_Benchmark_reversed_renamed], axis=0, ignore_ind
 
 # %% Now I need to estract end of month observations from the daily data for the Gov Bonds yields.
 
+# Mearging the two daily datasets for the Gov Bonds yields (1YR and 5YR) into a single dataframe
 Gov_Bond_daily_df = pd.concat([Gov_Bond_1_daily.iloc[:, [0, 1]], Gov_Bond_5_daily.iloc[:, 1]], axis=1)
 Gov_Bond_daily_df = Gov_Bond_daily_df.dropna()
+
+# Creating the end of month dataframe for the Gov Bonds yields by grouping the daily data by month and taking the last observation of each month
+Gov_Bond_End_of_Month_df = Gov_Bond_daily_df.groupby(Gov_Bond_daily_df['observation_date'].dt.to_period('M')).last().reset_index(drop=True)
+
+# Gov_Bond_End_of_Month_df.to_excel(OUTPUT_Gov_FILE, index=False)
+# %% Now I want to check the correlation between the two datasets for the overlapping period, to see if they are consistent with each other.
+# Easier and faster to do in excel. Done, correlation is almost perfect, both 0.996 
+# Now I can use the Leeper's gov data that is not present in the FRED datasets: from April 1953 to Jan 1962
+
+Leeper_Gov_Bond_End_of_Month_df = MunisData2.iloc[1: 104, [0, 2, 5 ]].set_axis(Gov_Bond_End_of_Month_df.columns, axis=1)
+
+Gov_Bond_End_of_Month_df = pd.concat([Leeper_Gov_Bond_End_of_Month_df, Gov_Bond_End_of_Month_df], axis=0, ignore_index=True)
+
+# %% Mearging the Gov Bonds yields end of month dataframe with the Municipal Bonds yields end of month dataframe into a single dataframe
+
+# ITR_df = pd.merge(ITR_df, Gov_Bond_End_of_Month_df, on='observation_date', how='left')
+
+ITR_df['Gov_1YR'] = Gov_Bond_End_of_Month_df.iloc[:, 1]
+ITR_df['Gov_5YR'] = Gov_Bond_End_of_Month_df.iloc[:, 2]
+
+# %% [4] Update of Implied Tax Rate (ITR) for the 1YR and 5YR maturities
+
+ITR_df['ITR_1YR'] = 1 - (ITR_df['Muni1'] / ITR_df['Gov_1YR'])
+ITR_df['ITR_5YR'] = 1 - (ITR_df['Muni5'] / ITR_df['Gov_5YR'])
+
+
+# %% SAVE ITR_df to Excel
+ITR_df.to_excel(OUTPUT_FILE, index=False)
+
 # %%
