@@ -51,6 +51,7 @@ print("Gemini API Client initialized successfully.")
 FILE_NAME = '../Disentangling_Fiscal_Event_Daily_Series.xlsx'
 OUTPUT_FILE = '../Classified_Fiscal_Events.csv'
 
+
 # Controlla se esiste già un salvataggio precedente
 if os.path.exists(OUTPUT_FILE):
     print(f"Loading existing progress from {OUTPUT_FILE}...")
