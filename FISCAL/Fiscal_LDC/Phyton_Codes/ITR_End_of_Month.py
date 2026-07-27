@@ -58,16 +58,24 @@ Gov_Bond_End_of_Month_df = Gov_Bond_daily_df.groupby(Gov_Bond_daily_df['observat
 # Easier and faster to do in excel. Done, correlation is almost perfect, both 0.996 
 # Now I can use the Leeper's gov data that is not present in the FRED datasets: from April 1953 to Jan 1962
 
-Leeper_Gov_Bond_End_of_Month_df = MunisData2.iloc[1: 104, [0, 2, 5 ]].set_axis(Gov_Bond_End_of_Month_df.columns, axis=1)
+Leeper_Gov_Bond_End_of_Month_df = MunisData2.iloc[0: 104, [0, 2, 5 ]].set_axis(Gov_Bond_End_of_Month_df.columns, axis=1)
 
 Gov_Bond_End_of_Month_df = pd.concat([Leeper_Gov_Bond_End_of_Month_df, Gov_Bond_End_of_Month_df], axis=0, ignore_index=True)
 
 # %% Mearging the Gov Bonds yields end of month dataframe with the Municipal Bonds yields end of month dataframe into a single dataframe
 
-# ITR_df = pd.merge(ITR_df, Gov_Bond_End_of_Month_df, on='observation_date', how='left')
+# Uniforming the name of the date columns
+ITR_df.rename(columns={ITR_df.columns[0]: 'Date'}, inplace=True)
+Gov_Bond_End_of_Month_df.columns = ['Date', 'Gov_1YR', 'Gov_5YR']
 
-ITR_df['Gov_1YR'] = Gov_Bond_End_of_Month_df.iloc[:, 1]
-ITR_df['Gov_5YR'] = Gov_Bond_End_of_Month_df.iloc[:, 2]
+# make sure the date columns are in the same format (datetime) for the merge
+ITR_df['Date'] = pd.to_datetime(ITR_df['Date'])
+Gov_Bond_End_of_Month_df['Date'] = pd.to_datetime(Gov_Bond_End_of_Month_df['Date'])
+
+# mearging the two dataframes safety using the 'Date' column as the key and using a left join to keep all the rows from ITR_df
+ITR_df = pd.merge(ITR_df, Gov_Bond_End_of_Month_df, on='Date', how='left')
+
+#ITR_df['Gov_1YR'] = Gov_Bond_End_of_Month_df.iloc[:, 1] # this line dis-aligns the series because in Municipal Bond Yiels we are missing november and december 2008
 
 # %% [4] Update of Implied Tax Rate (ITR) for the 1YR and 5YR maturities
 
