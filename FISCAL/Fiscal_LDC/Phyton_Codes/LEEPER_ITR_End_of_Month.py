@@ -12,7 +12,7 @@ import os # Operationg System, used to map the path of the files (working direct
 os.chdir('/Users/lorenzodelcol/Desktop/GIT/RA_4_Caggiano/FISCAL/Fiscal_Data/Initial_Cagg_Material/')
 
 OUTPUT_FILE = '../LEEPER_ITR_dataframe.xlsx'
-# OUTPUT_Gov_FILE = '../Gov_Bond_End_of_Month_df.xlsx'
+OUTPUT_Gov_FILE = '../LEEPER_Gov_Bond_End_of_Month_df.xlsx'
 
 # Loading raw data
 MunisData2            = pd.read_excel('MunisData2.xlsx'    , sheet_name='SubData')   # Municipal Bond Yields for 1,2,3,5,10,15,20 and 30 year maturities. END OF MONTH data from December 1949 to October 2008
@@ -87,5 +87,6 @@ ITR_df['ITR_5YR'] = 1 - (ITR_df['Muni5'] / ITR_df['Gov_5YR'])
 
 # %% SAVE ITR_df to Excel
 ITR_df.to_excel(OUTPUT_FILE, index=False)
+Gov_Bond_End_of_Month_df.to_excel(OUTPUT_Gov_FILE, index=False)
 
 # %%

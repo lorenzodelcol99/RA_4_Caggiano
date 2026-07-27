@@ -9,7 +9,7 @@ import os # Operationg System, used to map the path of the files (working direct
 os.chdir('/Users/lorenzodelcol/Desktop/GIT/RA_4_Caggiano/FISCAL/Fiscal_Data/Initial_Cagg_Material/')
 
 OUTPUT_FILE = '../ITR_dataframe.xlsx'
-# OUTPUT_Gov_FILE = '../Gov_Bond_End_of_Month_df.xlsx'
+OUTPUT_Gov_FILE = '../Fred_Gov_Bond_End_of_Month_df.xlsx'
 
 # Loading raw data
 MunisData2            = pd.read_excel('MunisData2.xlsx'    , sheet_name='SubData')   # Municipal Bond Yields for 1,2,3,5,10,15,20 and 30 year maturities. END OF MONTH data from December 1949 to October 2008
@@ -57,8 +57,9 @@ Gov_Bond_End_of_Month_df = Gov_Bond_daily_df.groupby(Gov_Bond_daily_df['observat
 # %% Now I want to check the correlation between the two datasets for the overlapping period, to see if they are consistent with each other.
 # Easier and faster to do in excel. Done, correlation is almost perfect, both 0.996 
 # Now I can use the Leeper's gov data that is not present in the FRED datasets: from April 1953 to Jan 1962
+# [0:105] From April 1953 to December 1961 included
 
-Leeper_Gov_Bond_End_of_Month_df = MunisData2.iloc[0: 104, [0, 2, 5 ]].set_axis(Gov_Bond_End_of_Month_df.columns, axis=1)
+Leeper_Gov_Bond_End_of_Month_df = MunisData2.iloc[0: 105, [0, 2, 5 ]].set_axis(Gov_Bond_End_of_Month_df.columns, axis=1)
 
 Gov_Bond_End_of_Month_df = pd.concat([Leeper_Gov_Bond_End_of_Month_df, Gov_Bond_End_of_Month_df], axis=0, ignore_index=True)
 
@@ -85,5 +86,5 @@ ITR_df['ITR_5YR'] = 1 - (ITR_df['Muni5'] / ITR_df['Gov_5YR'])
 
 # %% SAVE ITR_df to Excel
 ITR_df.to_excel(OUTPUT_FILE, index=False)
-
+Gov_Bond_End_of_Month_df.to_excel(OUTPUT_Gov_FILE, index=False)
 # %%
